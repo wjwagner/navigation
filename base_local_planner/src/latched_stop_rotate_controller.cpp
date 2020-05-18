@@ -157,28 +157,34 @@ bool LatchedStopRotateController::rotateToGoal(
                           Eigen::Vector3f vel,
                           Eigen::Vector3f vel_samples)> obstacle_check) {
   double yaw = tf2::getYaw(global_pose.pose.orientation);
+  // Somewhat deceivingly, this actualy is the rotational velocity measured from the odometry source.
+  // See odom_helper_.getRobotVel() for reference
   double vel_yaw = tf2::getYaw(robot_vel.pose.orientation);
   cmd_vel.linear.x = 0;
   cmd_vel.linear.y = 0;
   double ang_diff = angles::shortest_angular_distance(yaw, goal_th);
 
-  double v_theta_samp = std::min(limits.max_vel_theta, std::max(limits.min_vel_theta, fabs(ang_diff)));
+    // Compute the maximum and minimum velocities as allowed by the maximum angular acceleration
+    double vel_yaw_lim = vel_yaw;
+    // If we wanted to use the open-loop velocity estimate (commanded velocity from previous loop) then we could
+    // use the following:
+      //double vel_yaw_lim = prev_cmd_vel_angular_z == 0.0 ? vel_yaw :  prev_cmd_vel_angular_z;
+      //vel_yaw_lim = ang_diff > 0.0 ? std::max(vel_yaw_lim, min_in_place_vel_th_) : std::min(vel_yaw_lim, -1.0 * min_in_place_vel_th_);
+    
+    // v1 = v0 + a * dt
+    double max_acc_vel = vel_yaw_lim + acc_lim[2] * sim_period;
+    double min_acc_vel = vel_yaw_lim - acc_lim[2] * sim_period;
 
-  //take the acceleration limits of the robot into account
-  double max_acc_vel = fabs(vel_yaw) + acc_lim[2] * sim_period;
-  double min_acc_vel = fabs(vel_yaw) - acc_lim[2] * sim_period;
+    // We also want to make sure to send a velocity that allows us to stop when we reach the goal given our acceleration limits
+    // Compute the maximum speed we can send such that we will be able to stop in time before reaching the goal position
+    // while obeying our acceleration limits. v = sqrt(2 * a * dTheta)
+    double max_speed_to_stop = sign(ang_diff)*sqrt(2 * acc_lim[2] * fabs(ang_diff));
 
-  v_theta_samp = std::min(std::max(fabs(v_theta_samp), min_acc_vel), max_acc_vel);
+    // Impose both limits on the desired velocity
+    double v_theta_samp = ang_diff > 0.0 ? std::min(max_speed_to_stop, max_acc_vel) : std::max(max_speed_to_stop, min_acc_vel);
 
-  //we also want to make sure to send a velocity that allows us to stop when we reach the goal given our acceleration limits
-  double max_speed_to_stop = sqrt(2 * acc_lim[2] * fabs(ang_diff));
-  v_theta_samp = std::min(max_speed_to_stop, fabs(v_theta_samp));
-
-  v_theta_samp = std::min(limits.max_vel_theta, std::max(limits.min_vel_theta, v_theta_samp));
-
-  if (ang_diff < 0) {
-    v_theta_samp = - v_theta_samp;
-  }
+    // Enforce user defined velocity limits.
+    v_theta_samp = std::min(limits.max_vel_theta, std::max(limits.min_vel_theta, v_theta_samp));
 
   //we still want to lay down the footprint of the robot and check if the action is legal
   bool valid_cmd = obstacle_check(Eigen::Vector3f(global_pose.pose.position.x, global_pose.pose.position.y, yaw),

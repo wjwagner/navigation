@@ -335,27 +335,34 @@ namespace base_local_planner {
 
   bool TrajectoryPlannerROS::rotateToGoal(const geometry_msgs::PoseStamped& global_pose, const geometry_msgs::PoseStamped& robot_vel, double goal_th, geometry_msgs::Twist& cmd_vel){
     double yaw = tf2::getYaw(global_pose.pose.orientation);
+    // Somewhat deceivingly, this actualy is the rotational velocity measured from the odometry source.
+    // See odom_helper_.getRobotVel() for reference
     double vel_yaw = tf2::getYaw(robot_vel.pose.orientation);
     cmd_vel.linear.x = 0;
     cmd_vel.linear.y = 0;
     double ang_diff = angles::shortest_angular_distance(yaw, goal_th);
 
-    double v_theta_samp = ang_diff > 0.0 ? std::min(max_vel_th_,
-        std::max(min_in_place_vel_th_, ang_diff)) : std::max(min_vel_th_,
-        std::min(-1.0 * min_in_place_vel_th_, ang_diff));
+    // Compute the maximum and minimum velocities as allowed by the maximum angular acceleration
+    double vel_yaw_lim = vel_yaw;
+    // If we wanted to use the open-loop velocity estimate (commanded velocity from previous loop) then we could
+    // use the following:
+      //double vel_yaw_lim = prev_cmd_vel_angular_z == 0.0 ? vel_yaw :  prev_cmd_vel_angular_z;
+      //vel_yaw_lim = ang_diff > 0.0 ? std::max(vel_yaw_lim, min_in_place_vel_th_) : std::min(vel_yaw_lim, -1.0 * min_in_place_vel_th_);
+    
+    // v1 = v0 + a * dt
+    double max_acc_vel = vel_yaw_lim + acc_lim_theta_ * sim_period_;
+    double min_acc_vel = vel_yaw_lim - acc_lim_theta_ * sim_period_;
 
-    //take the acceleration limits of the robot into account
-    double max_acc_vel = fabs(vel_yaw) + acc_lim_theta_ * sim_period_;
-    double min_acc_vel = fabs(vel_yaw) - acc_lim_theta_ * sim_period_;
+    // We also want to make sure to send a velocity that allows us to stop when we reach the goal given our acceleration limits
+    // Compute the maximum speed we can send such that we will be able to stop in time before reaching the goal position
+    // while obeying our acceleration limits. v = sqrt(2 * a * dTheta)
+    double max_speed_to_stop = sign(ang_diff)*sqrt(2 * acc_lim_theta_ * fabs(ang_diff));
 
-    v_theta_samp = sign(v_theta_samp) * std::min(std::max(fabs(v_theta_samp), min_acc_vel), max_acc_vel);
+    // Impose both limits on the desired velocity
+    double v_theta_samp = ang_diff > 0.0 ? std::min(max_speed_to_stop, max_acc_vel) : std::max(max_speed_to_stop, min_acc_vel);
 
-    //we also want to make sure to send a velocity that allows us to stop when we reach the goal given our acceleration limits
-    double max_speed_to_stop = sqrt(2 * acc_lim_theta_ * fabs(ang_diff)); 
-
-    v_theta_samp = sign(v_theta_samp) * std::min(max_speed_to_stop, fabs(v_theta_samp));
-
-    // Re-enforce min_in_place_vel_th_.  It is more important than the acceleration limits.
+    // Enforce user defined velocity limits and min_in_place_vel_th_.  
+    // min_in_place_vel_th_ is more important than the acceleration limits and can override them
     v_theta_samp = v_theta_samp > 0.0
       ? std::min( max_vel_th_, std::max( min_in_place_vel_th_, v_theta_samp ))
       : std::max( min_vel_th_, std::min( -1.0 * min_in_place_vel_th_, v_theta_samp ));
