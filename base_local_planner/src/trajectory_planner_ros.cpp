@@ -71,7 +71,16 @@ namespace base_local_planner {
         default_config_ = config;
         setup_ = true;
       }
+      // Update params in tc_
       tc_->reconfigure(config);
+      // Update relevant params in this class
+      acc_lim_x_ = config.acc_lim_x;
+      acc_lim_y_ = config.acc_lim_y;
+      acc_lim_theta_ = config.acc_lim_theta;
+      max_vel_th_ = config.max_vel_theta;
+      min_vel_th_ = config.min_vel_theta;
+      min_in_place_vel_th_ = config.min_in_place_vel_theta;
+
       reached_goal_ = false;
   }
 
