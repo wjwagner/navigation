@@ -212,10 +212,11 @@ namespace base_local_planner {
       private_nh.param("max_vel_x", max_vel_x, 0.5);
       private_nh.param("min_vel_x", min_vel_x, 0.1);
 
-      double max_rotational_vel;
-      private_nh.param("max_rotational_vel", max_rotational_vel, 1.0);
-      max_vel_th_ = max_rotational_vel;
-      min_vel_th_ = -1.0 * max_rotational_vel;
+      private_nh.param("max_vel_theta", max_vel_th_, 1.0);
+      private_nh.param("min_vel_theta", min_vel_th_, -1.0);
+
+      if(private_nh.hasParam("max_rotational_vel"))
+        ROS_ERROR("You are using max_rotational_vel where you should be using max_vel_theta and min_vel_theta. Please change your configuration files appropriately.");
 
       min_in_place_vel_th_ = nav_core::loadParameterWithDeprecation(private_nh,
                                                                     "min_in_place_vel_theta",
