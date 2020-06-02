@@ -203,6 +203,7 @@ namespace base_local_planner {
           ROS_WARN("Trajectory Rollout planner initialized with param meter_scoring set to false. Set it to true to make your settings robust against changes of costmap resolution.");
         }
       }
+      ROS_INFO("In trajectory_planner_ros.cpp occdist_scale is: %f", occdist_scale);
 
       private_nh.param("heading_lookahead", heading_lookahead, 0.325);
       private_nh.param("oscillation_reset_dist", oscillation_reset_dist, 0.05);

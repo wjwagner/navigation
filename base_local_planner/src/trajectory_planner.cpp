@@ -82,6 +82,7 @@ namespace base_local_planner{
       path_distance_bias_ = config.path_distance_bias;
       goal_distance_bias_ = config.goal_distance_bias;
       occdist_scale_ = config.occdist_scale;
+      ROS_INFO("In trajectory_planner.cpp reconfigure() occdist_scale is: %f", occdist_scale_);
 
       if (meter_scoring_) {
         //if we use meter scoring, then we want to multiply the biases by the resolution of the costmap
@@ -361,6 +362,9 @@ namespace base_local_planner{
 
     //ROS_INFO("OccCost: %f, vx: %.2f, vy: %.2f, vtheta: %.2f", occ_cost, vx_samp, vy_samp, vtheta_samp);
     double cost = -1.0;
+    static bool first_pass = true;
+    if (first_pass) ROS_INFO("In trajectory_planner_ros.cpp generateTrajectory() occdist_scale is: %f", occdist_scale_);
+    first_pass = false;
     if (!heading_scoring_) {
       cost = path_distance_bias_ * path_dist + goal_dist * goal_distance_bias_ + occdist_scale_ * occ_cost;
     } else {
